@@ -1,0 +1,24 @@
+    a : %;
+    d : !;
+    s : $;
+    d := 123.2
+    s := true
+    begin
+        a := 12
+        b := 10b5h
+        c := 1234o + b
+    end
+
+    i : !;
+    while (a > 3) 
+       i := i + 1
+       if not (8 * i - 10 * 20 > b - 5 * 10) && (i != 9) || (i == 8) s := false
+       [else a := 3]
+       a := a - 10
+    if not s writeln(i+1)
+    for a := 0 to 10 [step 2]
+        a := a + 1
+        readln b, c
+        writeln a * b * c 
+    next
+end
