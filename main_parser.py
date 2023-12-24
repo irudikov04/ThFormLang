@@ -39,6 +39,7 @@ class Parser:
         self.current_token = Token()
         self.id_array = id_array
         self.stack = []
+        self.previous_previous_token = Token()
 
     def __call__(self):
         try:
@@ -61,7 +62,10 @@ class Parser:
         self.position -= 1
         self.current_token = self.tokens[self.position] if self.position != -1 else Token()
         self.previous_token = self.tokens[self.position - 1] if self.position - 1 != -1 else Token()
+        self.previous_previous_token = self.tokens[self.position - 2] if self.position - 2 != -1 else Token()
 
+    def get_previous_previous_token(self):
+        return self.previous_previous_token
     def get_expression_type(self):
         operand1 = self.stack.pop()
         if len(self.stack) == 0:
@@ -78,11 +82,9 @@ class Parser:
 
     def program(self):
 
-        #self.next_token()
         self.program_text()
 
     def initialize_variable(self):
-        #self.next_token()
         if self.current_token.token_type != TokenType.ID:
             raise UnexpectedSymbol(self.current_token.word, self.current_token.line_number,
                                    self.current_token.begin_position)
@@ -103,7 +105,6 @@ class Parser:
             d = list(self.id_array.keys())
             b = d[self.k]
             self.id_array[b]={'type': self.current_token.token_type, 'declared': True}
-
             self.next_token()
             if self.current_token.token_type != TokenType.SEMICOLON:
                 raise MissingDelimiterException(';', self.previous_token.line_number,
@@ -114,6 +115,9 @@ class Parser:
             return self.tokens[self.position]
         else:
             return None
+
+    def peek_next_token2(self):
+        return self.tokens[self.position].token_type
     def program_text(self):
         self.next_token()
         if self.current_token.token_type == TokenType.END_PROG:
@@ -131,6 +135,7 @@ class Parser:
             else:
                 self.operator()
             self.program_text()
+
 
     def program_end(self):
         self.next_token()
@@ -157,23 +162,30 @@ class Parser:
                 self.write_operator()
             case TokenType.LINE_BREAK:
                 self.operator()
+            case TokenType.NEXT:
+                self.previous_token1()
             case _:
                 raise UnexpectedSymbol(self.previous_token.word, self.previous_token.line_number,
                                        self.previous_token.begin_position)
 
+
+
     def complex_operator(self):
         self.operator()
-        if self.current_token.token_type in (TokenType.BEGIN, TokenType.LINE_BREAK):
-            self.next_token()
-            self.complex_operator()
-        elif self.current_token.token_type == TokenType.END:
+        if self.current_token.token_type in (TokenType.BEGIN, TokenType.SEMICOLON):
+            if self.current_token.token_type == TokenType.END_PROG or self.peek_next_token().token_type == TokenType.END_PROG:
+                self.next_token()
+            else:
+                self.next_token()
+                self.complex_operator()
+        elif self.current_token.token_type == TokenType.END_PROG:
             self.next_token()
         else:
             raise MissingDelimiterException('end', self.previous_token.line_number,
                                             self.previous_token.begin_position)
 
+
     def assign_operator(self):
-        #self.next_token()
         if self.current_token.token_type != TokenType.ASSIGN:
             raise MissingDelimiterException(':=', self.current_token.line_number,
                                             self.current_token.begin_position)
@@ -190,6 +202,10 @@ class Parser:
             if equal_names[expr_type] != id_type:
                 raise TypeExpressionError(current_id.word, current_id.line_number,
                                           current_id.begin_position, id_type, equal_names[expr_type])
+            self.next_token()
+            if self.current_token.token_type != TokenType.SEMICOLON and self.get_previous_previous_token() == TokenType.FOR:
+                raise MissingDelimiterException(';', self.previous_token.line_number,
+                                                self.previous_token.begin_position)
 
     def condition_operator(self):
         self.expression()
@@ -197,11 +213,7 @@ class Parser:
         if expr_type != '$':
             raise TypeExpressionError("условии", self.previous_token.line_number,
                                       self.previous_token.begin_position, TokenType.TYPE_B, equal_names[expr_type])
-        if self.current_token.token_type != TokenType.THEN:
-            raise MissingDelimiterException('then', self.current_token.line_number,
-                                            self.current_token.begin_position)
         else:
-            self.next_token()
             self.operator()
             if self.current_token.token_type == TokenType.ELSE:
                 self.next_token()
@@ -219,22 +231,34 @@ class Parser:
                                       TokenType.TYPE_I, self.id_array[self.current_token.word]['type'])
         self.next_token()
         self.assign_operator()
+
         if self.current_token.token_type != TokenType.TO:
             raise MissingDelimiterException('to', self.current_token.line_number,
                                             self.current_token.begin_position)
         else:
-            self.next_token()
-            self.expression()
-            expr_type = equal_names[self.stack.pop()]
-            if expr_type != self.id_array[current_id.word]['type']:
-                raise TypeExpressionError(current_id.word, current_id.line_number, current_id.begin_position,
-                                          self.id_array[current_id.word]['type'], expr_type)
-            if self.current_token.token_type != TokenType.DO:
-                raise MissingDelimiterException('do', self.current_token.line_number,
-                                                self.current_token.begin_position)
+            if self.current_token != TokenType.INTEGER:
+                self.next_token()
+                self.expression()
+                expr_type = equal_names[self.stack.pop()]
+                if expr_type != self.id_array[current_id.word]['type']:
+                    raise TypeExpressionError(current_id.word, current_id.line_number, current_id.begin_position,
+                                              self.id_array[current_id.word]['type'], expr_type)
+                else:
+                    self.next_token()
+                    self.next_token()
+                    if self.current_token != TokenType.NEXT:
+                        self.operator()
+                    else:
+                        self.next_token()
             else:
                 self.next_token()
-                self.operator()
+                self.next_token()
+                if self.current_token != TokenType.NEXT:
+                    self.operator()
+                else:
+                    self.next_token()
+
+
 
     def while_operator(self):
         self.expression()
@@ -242,11 +266,7 @@ class Parser:
         if expr_type != '$':
             raise TypeExpressionError("условии цикла", self.previous_token.line_number,
                                       self.previous_token.begin_position, TokenType.TYPE_B, equal_names[expr_type])
-        if self.current_token.token_type != TokenType.DO:
-            raise MissingDelimiterException('do', self.current_token.line_number,
-                                            self.current_token.begin_position)
         else:
-            self.next_token()
             self.operator()
 
     def read_operator(self):
@@ -259,8 +279,6 @@ class Parser:
             if self.current_token.token_type != TokenType.RIGHT_PAREN:
                 raise MissingDelimiterException(')', self.current_token.line_number,
                                                 self.current_token.begin_position)
-            else:
-                self.next_token()
 
     def write_operator(self):
         if self.current_token.token_type != TokenType.LEFT_PAREN:
@@ -272,8 +290,6 @@ class Parser:
             if self.current_token.token_type != TokenType.RIGHT_PAREN:
                 raise MissingDelimiterException(')', self.current_token.line_number,
                                                 self.current_token.begin_position)
-            else:
-                self.next_token()
 
     def id_sequence(self):
         if self.current_token.token_type != TokenType.ID:
